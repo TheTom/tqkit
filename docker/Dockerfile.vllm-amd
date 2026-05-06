@@ -25,8 +25,11 @@
 #   tq report --model qwen2.5-14b-instruct-1m --ctx 1M --layout tq+asym
 #   # → 72 GB vs 192 GB FP16 (62.5% savings). Fits on a single MI300X.
 
-ARG ROCM_VERSION=7.2
-FROM rocm/vllm-dev:base_${ROCM_VERSION}
+# rocm/vllm-dev:base tracks the current ROCm release vLLM dev image. For
+# reproducible builds, pin a dated nightly_main_YYYYMMDD or vllm-v* tag
+# from https://hub.docker.com/r/rocm/vllm-dev/tags via --build-arg ROCM_TAG.
+ARG ROCM_TAG=base
+FROM rocm/vllm-dev:${ROCM_TAG}
 
 LABEL org.opencontainers.image.source="https://github.com/TheTom/tqkit"
 LABEL org.opencontainers.image.description="vLLM + TurboQuant+ KV-cache compression for AMD ROCm"

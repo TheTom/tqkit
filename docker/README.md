@@ -1,6 +1,6 @@
 # Docker — vLLM with TurboQuant+ for AMD ROCm
 
-Pre-built Docker image of vLLM with TurboQuant+ KV-cache compression patched in. Ships [`TheTom/vllm@feature/turboquant-amd-noautotune`](https://github.com/TheTom/vllm/tree/feature/turboquant-amd-noautotune) on top of the canonical `rocm/vllm-dev:base_7.2` image.
+Pre-built Docker image of vLLM with TurboQuant+ KV-cache compression patched in. Ships [`TheTom/vllm@feature/turboquant-amd-noautotune`](https://github.com/TheTom/vllm/tree/feature/turboquant-amd-noautotune) on top of the canonical `rocm/vllm-dev:base` image (ROCm 7.2 vLLM dev environment).
 
 ## Pull (when published)
 
