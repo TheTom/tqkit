@@ -60,9 +60,32 @@ $ tq report --model qwen2.5-14b-instruct-1m --ctx 1M --layout tq+asym
 [KV cache] total @ 1M ctx: 72.0 GB (vs 192.0 GB FP16, 62.5% savings)
 ```
 
+## Integration recipes
+
+One-page docs for plugging TurboQuant+ into each supported backend live under [`docs/integrate/`](docs/integrate/).
+
+- [llama.cpp](docs/integrate/llama-cpp.md) — NVIDIA, Apple, AMD, CPU
+- [vLLM (NVIDIA CUDA)](docs/integrate/vllm-cuda.md) — A100, H100, RTX 4090
+- [vLLM (AMD ROCm)](docs/integrate/vllm-amd.md) — MI300X (the only TQ+ port for AMD anywhere)
+- [MLX-Swift](docs/integrate/mlx-swift.md) — Apple Silicon Macs + iPhone
+- [vllm-swift](docs/integrate/vllm-swift.md) — Apple Silicon OpenAI-API server
+
+## Docker (AMD ROCm)
+
+```bash
+docker pull thetom/vllm-turboquant:rocm-7.2
+docker run --rm -it \
+    --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host \
+    -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+    -p 8000:8000 thetom/vllm-turboquant:rocm-7.2 \
+        --model Qwen/Qwen2.5-14B-Instruct-1M --kv-cache-dtype tq_asym
+```
+
+See [`docker/README.md`](docker/README.md) for build details.
+
 ## Status
 
-**v0.2.0 — alpha**. KV math + reporter + table work. Canonical bench runner with engine bridges lands in v0.3.0.
+**v0.2.1 — alpha**. KV math + reporter + table + canonical bench config + integration docs ship today. Canonical bench runner with engine bridges lands in v0.3.0.
 
 ## License
 
