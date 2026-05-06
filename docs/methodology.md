@@ -100,6 +100,33 @@ When a new paper claims X% KV cache savings:
 
 A paper that survives this audit is honest. A paper that flunks step 1 isn't going to survive 4 or 5 either.
 
+## Compress vs avoid: two orthogonal KV strategies
+
+Most KV-savings papers focus on **compression**: store the same K and V values in fewer bits. TurboQuant+ asymmetric reaches 62% savings this way.
+
+There's a second strategy: **avoidance**. Don't allocate KV cache for irrelevant context in the first place. Retrieval-augmented generation (RAG) is the canonical avoidance approach — embed the haystack, retrieve the top-K chunks, feed only those to the model. The model never sees most of the input, so its KV cache stays small.
+
+The two strategies compose multiplicatively. `tq compare-strategies` makes this concrete:
+
+```
+$ tq compare-strategies --model qwen2.5-14b-instruct-1m --ctx 1M --retrieved-tokens 3000
+
+# Qwen/Qwen2.5-14B-Instruct-1M — KV cache savings strategies @ 1M ctx
+
+| strategy                       | KV cache | savings vs baseline |
+| ------------------------------ | -------- | ------------------- |
+| baseline (FP16, full ctx)      | 192 GB   |  —                  |
+| TQ+ asym (compress, full ctx)  | 73.5 GB  | 61.72%              |
+| longctx (FP16, top-K only)     | 562 MB   | 99.71%              |
+| longctx + TQ+ asym (combined)  | 215 MB   | 99.89%              |
+```
+
+The most efficient KV cache is the one you never allocate. **Avoidance dominates compression numerically when retrieval succeeds**; compression matters most for workloads retrieval can't shortcut.
+
+When does retrieval succeed? Empirically, on retrieval-shaped tasks (find the Nth message of type X, look up a fact in a knowledge base) the relevant context is small relative to the haystack and bi-encoder retrieval finds it cleanly. On tasks that need every token (line-by-line code review, chain-of-thought reasoning across millions of tokens) retrieval can't help and compression is the only lever.
+
+**Use both.** Retrieve aggressively first; compress what's left.
+
 ## Why this matters
 
 Long-context inference is now a marketing battlefield. Multiple closed-stack startups raise rounds claiming "subquadratic" or "10x KV savings" architectures. Most of those claims are either:
