@@ -146,6 +146,50 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compare_strategies(args: argparse.Namespace) -> int:
+    """Compare KV cache savings strategies side by side: compress vs
+    avoid vs combined.
+
+    The unified narrative: TurboQuant+ shrinks the KV cache (compression);
+    longctx avoids it entirely by retrieving the relevant chunks
+    (avoidance). They combine multiplicatively. The most efficient KV
+    cache is the one you never allocate.
+    """
+    if args.model not in MODELS:
+        print(f"unknown model '{args.model}'", file=sys.stderr)
+        return 1
+    arch = MODELS[args.model]
+    ctx = _parse_ctx(args.ctx)
+    retrieved = args.retrieved_tokens
+
+    fp16_bytes = kv_bytes_total(arch, "fp16", ctx)
+    tq_bytes = kv_bytes_total(arch, "tq+asym", ctx)
+    longctx_bytes = kv_bytes_total(arch, "fp16", retrieved)
+    combined_bytes = kv_bytes_total(arch, "tq+asym", retrieved)
+
+    rows = [
+        ("baseline (FP16, full ctx)", fp16_bytes,
+         "no compression, no retrieval"),
+        ("TQ+ asym (compress, full ctx)", tq_bytes,
+         "K=FP8, V=4bit + metadata"),
+        ("longctx (FP16, top-K only)", longctx_bytes,
+         "retrieve relevant chunks, no compression"),
+        ("longctx + TQ+ asym (combined)", combined_bytes,
+         "the most efficient KV cache is the one you never allocate"),
+    ]
+
+    print(f"# {arch.name} — KV cache savings strategies @ {args.ctx} ctx")
+    print(f"# (assuming retrieval keeps {retrieved:,} tokens)")
+    print()
+    print("| strategy | KV cache | savings vs baseline | notes |")
+    print("| -------- | -------- | ------------------- | ----- |")
+    for name, b, note in rows:
+        sav = savings_pct(fp16_bytes, b)
+        sav_str = "—" if b == fp16_bytes else f"{sav:.2f}%"
+        print(f"| {name} | {fmt_bytes(b)} | {sav_str} | {note} |")
+    return 0
+
+
 def cmd_table(args: argparse.Namespace) -> int:
     """Print the unified KV-savings table for one model across layouts."""
     if args.model not in MODELS:
@@ -263,6 +307,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="print the canonical benchmark YAML (pinned model + expected results)",
     )
     sub_config.set_defaults(func=cmd_config)
+
+    sub_compare = sub.add_parser(
+        "compare-strategies",
+        help="compare compress (TQ+) vs avoid (longctx) vs combined",
+    )
+    sub_compare.add_argument(
+        "--model", required=True,
+        help=f"one of: {', '.join(sorted(MODELS))}",
+    )
+    sub_compare.add_argument(
+        "--ctx", default="1M",
+        help="full-context size the user *would* serve. default 1M",
+    )
+    sub_compare.add_argument(
+        "--retrieved-tokens", type=int, default=3000,
+        help="tokens longctx retrieves and feeds to the model. default 3000",
+    )
+    sub_compare.set_defaults(func=cmd_compare_strategies)
 
     sub_table = sub.add_parser(
         "table",

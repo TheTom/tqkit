@@ -5,6 +5,6 @@ KV-cache compression across llama.cpp, vLLM (CUDA + AMD), MLX-Swift, and
 vllm-swift.
 """
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 __all__ = ["__version__"]
