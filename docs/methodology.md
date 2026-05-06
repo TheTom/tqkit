@@ -48,6 +48,28 @@ For hybrid linear+full attention models (Qwen3-Next, Qwen3.6) only the **full-at
 
 Running `tq report --model qwen3.6-27b --ctx 256K --layout fp16` returns 16 GB total — which corresponds to 16/64 layers, not 64/64. A claim that doesn't account for the linear-attention layers will overstate KV cache size by ~4× on this architecture.
 
+**vLLM TurboQuant+ rejects hybrid models entirely** (per `vllm/engine/arg_utils.py` in TheTom/vllm@feature/turboquant-kv-cache). If a competitor claims TQ-style savings on Qwen3-Next, they're either using a different implementation or the claim doesn't apply to the standard fork.
+
+### Boundary-layer skip
+
+The vllm TurboQuant+ fork keeps the **first and last 2 attention layers at FP16 unconditionally**, regardless of model. This is `get_boundary_skip_layers(num_layers, n=2)` in `vllm/model_executor/layers/quantization/turboquant/config.py`.
+
+For a 48-layer model, that's 4 FP16 layers + 44 quantized layers. Real-world savings are 5–8% lower than the all-quantized math `tq report` reports. To compute the realistic figure:
+
+```python
+from tqkit.kv_math import kv_bytes_total_with_boundary_skip, MODELS
+arch = MODELS["qwen2.5-14b-instruct-1m"]
+realistic_bytes = kv_bytes_total_with_boundary_skip(
+    arch, layout="tq+asym", ctx=1_000_000, n_skip=2,
+)
+```
+
+For the canonical Qwen2.5-14B at 1M context with `tq+asym`, the all-quantized headline is **72 GB** (61.7% savings) but the boundary-skip-adjusted reality is **~83 GB** (57% savings). Both numbers fit on a single MI300X (192 GB after weights), but the post should report the realistic 57%, not the headline 61.7%, when claiming "fits on one GPU." Otherwise the audit step 1 (math vs claim) flags it.
+
+### Per-element metadata overhead
+
+A "4-bit" V is not literally 0.5 bytes per element — every block carries an FP16 scale + zero point. At `head_dim=128`, real V_bpe is 0.5313 (5.9% overhead). At `head_dim=256` it's closer to 0.516. Verified bpe values for every TurboQuant+ preset live in `tqkit/kv_math.py:LAYOUT_BYTES_PER_ELEM` with cross-reference to vllm source.
+
 ## Layer 2 — runtime measurement
 
 Theoretical math says what the cache *should* be. `tq bench` runs the actual engine and verifies what the cache *is*. Two things the math cannot catch:

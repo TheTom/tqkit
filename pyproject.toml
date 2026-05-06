@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tqkit"
-version = "0.3.0"
+version = "0.4.0"
 description = "Unified toolkit for benchmarking and integrating TurboQuant+ KV-cache compression across inference engines (llama.cpp, vLLM, MLX)."
 readme = "README.md"
 requires-python = ">=3.10"

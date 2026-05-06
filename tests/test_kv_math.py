@@ -27,12 +27,40 @@ def test_qwen14b_fp16_per_token_matches_reference():
     assert bytes_per_tok == 192 * 1024
 
 
-def test_tq_asym_savings_is_625_pct():
-    """K=q8_0 (1B) + V=turbo4 (0.5B) vs FP16 (4B) = 62.5% savings."""
+def test_tq_asym_savings_matches_verified_bpe():
+    """tq+asym (K=FP8 1.0 B, V=4bit+metadata 0.5313 B) vs FP16 (4 B sum) =
+    1 - (1.0 + 0.5313) / 4 = 61.72% savings. Verified against
+    TheTom/vllm@feature/turboquant-kv-cache turboquant_k8v4 preset, including
+    fp16 scale+zero metadata on V."""
     arch = MODELS["qwen2.5-14b-instruct-1m"]
     fp16 = kv_bytes_total(arch, "fp16", 1024)
     tq = kv_bytes_total(arch, "tq+asym", 1024)
-    assert savings_pct(fp16, tq) == pytest.approx(62.5)
+    assert savings_pct(fp16, tq) == pytest.approx(61.72, abs=0.01)
+
+
+def test_boundary_skip_keeps_two_layers_fp16_at_each_end():
+    """The vllm fork keeps first/last 2 attention layers at FP16. Effective
+    KV cache is bigger than the all-quantized math suggests."""
+    from tqkit.kv_math import kv_bytes_total_with_boundary_skip
+
+    arch = MODELS["qwen2.5-14b-instruct-1m"]  # 48 attention layers
+    naive = kv_bytes_total(arch, "tq+asym", ctx=1024)
+    realistic = kv_bytes_total_with_boundary_skip(
+        arch, "tq+asym", ctx=1024, n_skip=2,
+    )
+    # Realistic is bigger: 4 FP16 layers cost more per layer than 44 TQ+ layers.
+    assert realistic > naive
+    # Sanity: skip=0 returns the naive value
+    no_skip = kv_bytes_total_with_boundary_skip(
+        arch, "tq+asym", ctx=1024, n_skip=0,
+    )
+    assert no_skip == pytest.approx(naive)
+    # FP16 layout doesn't get the skip treatment (no quantized layer to skip)
+    fp16 = kv_bytes_total(arch, "fp16", ctx=1024)
+    fp16_skip = kv_bytes_total_with_boundary_skip(
+        arch, "fp16", ctx=1024, n_skip=2,
+    )
+    assert fp16_skip == fp16
 
 
 def test_unknown_layout_raises():
@@ -93,7 +121,8 @@ def test_cli_report_runs():
     assert rc == 0
     out = buf.getvalue()
     assert "Qwen2.5-14B-Instruct-1M" in out
-    assert "62.5%" in out
+    # Verified bpe = 1.0/0.5313 → 61.7% savings, not the old 62.5%
+    assert "61.7%" in out or "61.72%" in out
     assert "tq+asym" in out
 
 
@@ -115,6 +144,17 @@ def test_cli_table_runs():
     assert "fp16" in out
     assert "tq+asym" in out
     assert "192.0 KB" in out  # FP16 per-token
+
+
+def test_cli_table_with_unknown_layout_errors():
+    """Bogus layout names raise from the math layer."""
+    err = io.StringIO()
+    with redirect_stderr(err):
+        with pytest.raises((ValueError, SystemExit)):
+            main([
+                "table", "--model", "qwen2.5-14b-instruct-1m",
+                "--layouts", "fp16", "not-a-real-layout",
+            ])
 
 
 def test_cli_table_custom_layouts_and_ctxs():

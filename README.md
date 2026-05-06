@@ -16,14 +16,15 @@ You bring the inference engine. `tqkit` autodetects what's installed, runs the c
 
 ## Why this exists
 
-KV cache is the dominant memory cost at long context. TurboQuant+ asymmetric (K=q8_0, V=turbo4) shrinks it ~62% with negligible accuracy loss. The savings replicate across engines and hardware vendors. `tqkit` is the proof, the tool, and the install path.
+KV cache is the dominant memory cost at long context. TurboQuant+ asymmetric (K=FP8, V=4-bit + metadata) shrinks it ~62% (or ~57% accounting for the 4 boundary layers that stay FP16). The savings replicate across engines and hardware vendors. `tqkit` is the proof, the tool, and the install path.
 
 For a 14B model at 1M tokens of context:
 
-| layout | KV cache size | fits on MI300X 192GB? |
-| ------ | ------------- | --------------------- |
-| FP16 | 192 GB | no (after weights, ~28 GB free) |
-| TQ+ asym (K=q8_0, V=turbo4) | 72 GB | **yes** |
+| layout | KV cache size (all-quantized) | fits on MI300X 192GB after weights? |
+| ------ | ----------------------------- | ----------------------------------- |
+| FP16 | 192 GB | no |
+| TQ+ asym (`turboquant_k8v4`) | 73.5 GB headline / ~83 GB realistic with boundary skip | **yes** |
+| TQ+ sym 4-bit (`turboquant_4bit_nc`) | 50.3 GB | **yes** (more headroom) |
 
 You can verify the math yourself:
 
@@ -85,7 +86,7 @@ See [`docker/README.md`](docker/README.md) for build details.
 
 ## Status
 
-**v0.3.0 — alpha**. Shipping today:
+**v0.4.0 — alpha**. Shipping today:
 
 - KV math + `tq report` + `tq table`
 - Pinned `canonical_bench.yml` + `tq config`
