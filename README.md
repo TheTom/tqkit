@@ -85,7 +85,17 @@ See [`docker/README.md`](docker/README.md) for build details.
 
 ## Status
 
-**v0.2.1 — alpha**. KV math + reporter + table + canonical bench config + integration docs ship today. Canonical bench runner with engine bridges lands in v0.3.0.
+**v0.3.0 — alpha**. Shipping today:
+
+- KV math + `tq report` + `tq table`
+- Pinned `canonical_bench.yml` + `tq config`
+- Engine bridges (`tq bench`) for llama.cpp, vLLM (CUDA + AMD), MLX-Swift, vllm-swift
+- Integration recipes for all 5 backends (`docs/integrate/`)
+- Docker scaffold for AMD ROCm (`docker/Dockerfile.vllm-amd`)
+- Models supported in `tq report`: Qwen2.5 7B/14B/32B, Qwen3-8B, Qwen3.6-27B, Qwen3.6-35B-A3B, Qwen3-Next-80B-A3B, Llama-3.1 8B/70B, Mistral-7B
+- 39 tests, 92% line coverage, ≥85% gate enforced
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
 
 ## License
 
