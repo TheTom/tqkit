@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tqkit"
+version = "0.1.0"
+description = "Unified toolkit for benchmarking and integrating TurboQuant+ KV-cache compression across inference engines (llama.cpp, vLLM, MLX)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "TheTom"}
+]
+keywords = ["llm", "kv-cache", "turboquant", "quantization", "vllm", "llama-cpp", "mlx", "inference"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Development Status :: 3 - Alpha",
+]
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+tq = "tqkit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/TheTom/tqkit"
+Repository = "https://github.com/TheTom/tqkit"
+Documentation = "https://github.com/TheTom/tqkit#readme"
+
+[tool.setuptools.packages.find]
+include = ["tqkit*"]
