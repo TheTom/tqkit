@@ -6,6 +6,14 @@ import sys
 
 from tqkit import __version__
 from tqkit.backends import detect_all
+from tqkit.kv_math import (
+    LAYOUT_BYTES_PER_ELEM,
+    MODELS,
+    fmt_bytes,
+    kv_bytes_per_token,
+    kv_bytes_total,
+    savings_pct,
+)
 
 
 def cmd_backends(args: argparse.Namespace) -> int:
@@ -26,9 +34,74 @@ def cmd_bench(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_ctx(s: str) -> int:
+    """Parse context strings like '32K', '1M', '128000'."""
+    s = s.strip().upper()
+    if s.endswith("K"):
+        return int(float(s[:-1]) * 1024)
+    if s.endswith("M"):
+        return int(float(s[:-1]) * 1024 * 1024)
+    return int(s)
+
+
 def cmd_report(args: argparse.Namespace) -> int:
-    print("`tq report` — KV-cache layout reporter", file=sys.stderr)
-    print("(coming in v0.2.0; ports KV reporter from each engine)", file=sys.stderr)
+    """Print theoretical KV-cache size for a model + ctx + layout.
+
+    Computed from pinned HF architecture (head_dim, num_kv_heads, num_layers).
+    Compares baseline FP16 to the requested layout. Used for reproducibility
+    framing and to populate the canonical bench table without needing each
+    engine to expose runtime KV-cache instrumentation.
+    """
+    if args.model not in MODELS:
+        print(f"unknown model '{args.model}'", file=sys.stderr)
+        print(f"available: {', '.join(sorted(MODELS))}", file=sys.stderr)
+        return 1
+    arch = MODELS[args.model]
+    ctx = _parse_ctx(args.ctx)
+
+    fp16_total = kv_bytes_total(arch, "fp16", ctx)
+    target_total = kv_bytes_total(arch, args.layout, ctx)
+    fp16_per_tok = kv_bytes_per_token(arch, "fp16")
+    target_per_tok = kv_bytes_per_token(arch, args.layout)
+    sav = savings_pct(fp16_total, target_total)
+
+    print(f"[KV cache] model: {arch.name}")
+    print(f"[KV cache] arch: layers={arch.num_layers} "
+          f"kv_heads={arch.num_kv_heads} head_dim={arch.head_dim}")
+    print(f"[KV cache] layout: {args.layout}")
+    print(f"[KV cache] per-token: {fmt_bytes(target_per_tok)} "
+          f"(vs {fmt_bytes(fp16_per_tok)} FP16)")
+    print(f"[KV cache] total @ {args.ctx} ctx: {fmt_bytes(target_total)} "
+          f"(vs {fmt_bytes(fp16_total)} FP16, {sav:.1f}% savings)")
+    return 0
+
+
+def cmd_table(args: argparse.Namespace) -> int:
+    """Print the unified KV-savings table for one model across layouts."""
+    if args.model not in MODELS:
+        print(f"unknown model '{args.model}'", file=sys.stderr)
+        return 1
+    arch = MODELS[args.model]
+    layouts = args.layouts or ["fp16", "tq+sym", "tq+asym"]
+    ctxs = [_parse_ctx(c) for c in (args.ctxs or ["8K", "32K", "64K", "1M"])]
+
+    print(f"# {arch.name} — KV cache size by layout × context")
+    print()
+    header_ctx = " | ".join(f"{c // 1024}K" if c < 1024 * 1024
+                            else f"{c // (1024 * 1024)}M"
+                            for c in ctxs)
+    print(f"| layout | per-token | {header_ctx} | savings vs FP16 |")
+    print(f"| ------ | --------- | "
+          + " | ".join("---" for _ in ctxs) + " | --- |")
+    fp16_max = kv_bytes_total(arch, "fp16", max(ctxs))
+    for layout in layouts:
+        per_tok = kv_bytes_per_token(arch, layout)
+        cells = [fmt_bytes(kv_bytes_total(arch, layout, c)) for c in ctxs]
+        target_max = kv_bytes_total(arch, layout, max(ctxs))
+        sav = savings_pct(fp16_max, target_max)
+        sav_str = "—" if layout == "fp16" else f"{sav:.0f}%"
+        print(f"| {layout} | {fmt_bytes(per_tok)} | "
+              + " | ".join(cells) + f" | {sav_str} |")
     return 0
 
 
@@ -81,9 +154,42 @@ def build_parser() -> argparse.ArgumentParser:
                                help="run canonical KV-savings benchmark")
     sub_bench.set_defaults(func=cmd_bench)
 
-    sub_report = sub.add_parser("report",
-                                help="print the most recent KV-cache layout report")
+    sub_report = sub.add_parser(
+        "report",
+        help="print theoretical KV-cache size for a model + ctx + layout",
+    )
+    sub_report.add_argument(
+        "--model", required=True,
+        help=f"one of: {', '.join(sorted(MODELS))}",
+    )
+    sub_report.add_argument(
+        "--ctx", default="32K",
+        help="context length (e.g. 8K, 32K, 1M, or raw int). default 32K",
+    )
+    sub_report.add_argument(
+        "--layout", default="tq+asym",
+        choices=sorted(LAYOUT_BYTES_PER_ELEM),
+        help="KV cache layout. default tq+asym",
+    )
     sub_report.set_defaults(func=cmd_report)
+
+    sub_table = sub.add_parser(
+        "table",
+        help="print KV-savings table (one model across layouts × ctxs)",
+    )
+    sub_table.add_argument(
+        "--model", required=True,
+        help=f"one of: {', '.join(sorted(MODELS))}",
+    )
+    sub_table.add_argument(
+        "--layouts", nargs="+",
+        help="layouts to compare. default: fp16 tq+sym tq+asym",
+    )
+    sub_table.add_argument(
+        "--ctxs", nargs="+",
+        help="context lengths. default: 8K 32K 64K 1M",
+    )
+    sub_table.set_defaults(func=cmd_table)
 
     sub_integrate = sub.add_parser(
         "integrate",

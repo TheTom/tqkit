@@ -16,9 +16,22 @@ You bring the inference engine. `tqkit` autodetects what's installed, runs the c
 
 ## Why this exists
 
-KV cache is the dominant memory cost at long context. TurboQuant+ shrinks it ~70% with negligible accuracy loss. The savings replicate across engines and hardware vendors. `tqkit` is the proof, the tool, and the install path.
+KV cache is the dominant memory cost at long context. TurboQuant+ asymmetric (K=q8_0, V=turbo4) shrinks it ~62% with negligible accuracy loss. The savings replicate across engines and hardware vendors. `tqkit` is the proof, the tool, and the install path.
 
-A 14B model's KV cache at 1M tokens in FP16 is ~200 GB. With TurboQuant+ asymmetric quantization, it's ~56 GB — small enough to fit on a single MI300X.
+For a 14B model at 1M tokens of context:
+
+| layout | KV cache size | fits on MI300X 192GB? |
+| ------ | ------------- | --------------------- |
+| FP16 | 192 GB | no (after weights, ~28 GB free) |
+| TQ+ asym (K=q8_0, V=turbo4) | 72 GB | **yes** |
+
+You can verify the math yourself:
+
+```bash
+pip install tqkit
+tq report --model qwen2.5-14b-instruct-1m --ctx 1M --layout tq+asym
+tq table --model qwen2.5-14b-instruct-1m
+```
 
 ## Install
 
@@ -29,15 +42,27 @@ pip install tqkit
 ## Usage
 
 ```bash
-tq backends                # autodetect installed engines + versions
-tq bench                   # run canonical KV-savings benchmark
-tq report                  # print the most recent KV-cache layout report
-tq integrate <backend>     # print install + serve recipe for one engine
+tq backends                                            # autodetect installed engines
+tq report --model qwen2.5-14b-instruct-1m --ctx 32K    # KV cache size for one config
+tq table --model qwen2.5-14b-instruct-1m               # full layout × ctx grid
+tq integrate <backend>                                 # install + serve recipe
+tq bench                                               # canonical benchmark (v0.3.0)
+```
+
+Example output:
+
+```
+$ tq report --model qwen2.5-14b-instruct-1m --ctx 1M --layout tq+asym
+[KV cache] model: Qwen/Qwen2.5-14B-Instruct-1M
+[KV cache] arch: layers=48 kv_heads=8 head_dim=128
+[KV cache] layout: tq+asym
+[KV cache] per-token: 72.0 KB (vs 192.0 KB FP16)
+[KV cache] total @ 1M ctx: 72.0 GB (vs 192.0 GB FP16, 62.5% savings)
 ```
 
 ## Status
 
-**v0.1.0 — alpha**. Backend detection + version reporting work. Canonical bench runner and per-engine bridges land in v0.2.0.
+**v0.2.0 — alpha**. KV math + reporter + table work. Canonical bench runner with engine bridges lands in v0.3.0.
 
 ## License
 
