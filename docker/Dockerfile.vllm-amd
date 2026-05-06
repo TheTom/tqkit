@@ -1,0 +1,57 @@
+# vLLM with TurboQuant+ KV-cache compression for AMD ROCm.
+#
+# Built on the canonical ROCm 7.2 vLLM dev image. Adds
+# TheTom/vllm@feature/turboquant-amd on top so users get the TQ+ KV cache
+# layouts (tq+sym, tq+asym) and the AMD-specific MFMA-friendly scoring
+# kernels.
+#
+# Hardware: tested on MI300X (192 GB HBM3, gfx942). Should also build for
+# MI250X / gfx90a but not yet validated.
+#
+# Build:
+#   docker buildx build --platform linux/amd64 \
+#     -t thetom/vllm-turboquant:rocm-7.2 -f Dockerfile.vllm-amd .
+#
+# Serve:
+#   docker run --rm -it --device=/dev/kfd --device=/dev/dri \
+#     --group-add video --ipc=host \
+#     -v $HOME/.cache/huggingface:/root/.cache/huggingface \
+#     -p 8000:8000 thetom/vllm-turboquant:rocm-7.2 \
+#     --model Qwen/Qwen2.5-14B-Instruct-1M \
+#     --kv-cache-dtype tq_asym
+#
+# Verify KV savings:
+#   pip install tqkit
+#   tq report --model qwen2.5-14b-instruct-1m --ctx 1M --layout tq+asym
+#   # → 72 GB vs 192 GB FP16 (62.5% savings). Fits on a single MI300X.
+
+ARG ROCM_VERSION=7.2
+FROM rocm/vllm-dev:base_${ROCM_VERSION}
+
+LABEL org.opencontainers.image.source="https://github.com/TheTom/tqkit"
+LABEL org.opencontainers.image.description="vLLM + TurboQuant+ KV-cache compression for AMD ROCm"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+ARG VLLM_REPO=https://github.com/TheTom/vllm.git
+ARG VLLM_BRANCH=feature/turboquant-amd
+ARG VLLM_COMMIT=HEAD
+
+WORKDIR /workspace
+
+# Pull the patched vLLM and install in editable mode so the user can
+# inspect / patch from inside the container if they want to.
+RUN git clone --branch ${VLLM_BRANCH} --depth 1 ${VLLM_REPO} vllm \
+ && cd vllm \
+ && git rev-parse HEAD > /workspace/.vllm-commit \
+ && pip install --no-cache-dir -e . \
+ && pip install --no-cache-dir --upgrade tqkit
+
+# Sanity: print the KV reporter info at container start so users see the
+# config without running anything.
+COPY entrypoint.sh /usr/local/bin/tqkit-entrypoint
+RUN chmod +x /usr/local/bin/tqkit-entrypoint
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/tqkit-entrypoint"]
+CMD ["--help"]
