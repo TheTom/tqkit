@@ -15,6 +15,7 @@ from tqkit.engines import (
     ENGINES,
     EngineNotInstalled,
     LlamaCppEngine,
+    LongctxEngine,
     MlxSwiftEngine,
     VllmAmdEngine,
     VllmCudaEngine,
@@ -31,6 +32,7 @@ def test_get_engine_known():
     assert isinstance(get_engine("vllm-amd"), VllmAmdEngine)
     assert isinstance(get_engine("mlx-swift"), MlxSwiftEngine)
     assert isinstance(get_engine("vllm-swift"), VllmSwiftEngine)
+    assert isinstance(get_engine("longctx"), LongctxEngine)
 
 
 def test_get_engine_unknown_raises():
@@ -238,3 +240,50 @@ def test_vllm_swift_unsupported_layout():
     e = VllmSwiftEngine(binary="/fake/vllm-swift")
     with pytest.raises(ValueError, match="layout"):
         e.run(model="m", prompt="p", ctx_tokens=1024, layout="bogus")
+
+
+# --- longctx (retrieval-as-savings) ---
+
+def test_longctx_supports_canonical_layouts():
+    """longctx is layout-agnostic but accepts the canonical names so the
+    bench dispatcher can iterate uniformly."""
+    e = LongctxEngine()
+    assert e.supports("fp16")
+    assert e.supports("tq+asym")
+    assert not e.supports("not-a-layout")
+
+
+def test_longctx_run_raises_when_not_installed():
+    """If the longctx package isn't importable, run() should raise cleanly."""
+    e = LongctxEngine()
+    with patch.object(e, "is_installed", return_value=False):
+        with pytest.raises(EngineNotInstalled):
+            e.run(model="m", prompt="p", ctx_tokens=1024)
+
+
+def test_longctx_run_dispatches_to_LongCtxClient():
+    """Verify the engine wires through to longctx.LongCtxClient.ask and
+    materializes a RunResult with retrieval-style metadata."""
+    e = LongctxEngine(server="http://fake:5050/v1/chat/completions")
+    fake_response = type("R", (), {
+        "content": "answer", "retrieved_indices": [0, 2, 5],
+        "prompt_tokens": 3000, "completion_tokens": 50, "latency_s": 0.3,
+    })()
+    fake_client_cls = type("C", (), {
+        "__init__": lambda self, **kw: None,
+        "ask": lambda self, **kw: fake_response,
+    })
+    fake_module = type("M", (), {"LongCtxClient": fake_client_cls})
+    with patch.object(e, "is_installed", return_value=True), \
+         patch.dict("sys.modules", {"longctx": fake_module}):
+        result = e.run(
+            model="qwen25-32b", prompt="what about q3 revenue?",
+            ctx_tokens=1_048_576,
+            candidates=["c0", "c1", "c2"], top_k=8,
+            layout="tq+asym",
+        )
+    assert result.backend == "longctx"
+    assert result.layout == "longctx+tq+asym"
+    assert result.kv_cache_bytes == 3000 * 192 * 1024
+    assert "retrieval (not compression)" in result.extra["savings_strategy"]
+    assert result.extra["retrieved_token_count"] == "3000"

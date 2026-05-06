@@ -16,6 +16,7 @@ from tqkit.engines.vllm_cuda import VllmCudaEngine
 from tqkit.engines.vllm_amd import VllmAmdEngine
 from tqkit.engines.mlx_swift import MlxSwiftEngine
 from tqkit.engines.vllm_swift import VllmSwiftEngine
+from tqkit.engines.longctx import LongctxEngine
 
 ENGINES: dict[str, type[Engine]] = {
     "llama-cpp":   LlamaCppEngine,
@@ -23,6 +24,7 @@ ENGINES: dict[str, type[Engine]] = {
     "vllm-amd":    VllmAmdEngine,
     "mlx-swift":   MlxSwiftEngine,
     "vllm-swift":  VllmSwiftEngine,
+    "longctx":     LongctxEngine,
 }
 
 
@@ -45,4 +47,5 @@ __all__ = [
     "VllmAmdEngine",
     "MlxSwiftEngine",
     "VllmSwiftEngine",
+    "LongctxEngine",
 ]
