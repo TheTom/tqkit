@@ -1,5 +1,7 @@
 # tqkit
 
+> **🚧 Work in progress.** Pre-alpha. APIs, layout names, and headline numbers will shift as engine ports and validation runs land. Pin a version (`pip install tqkit==0.4.2`) if you depend on it. Issues and PRs welcome.
+
 Unified toolkit for benchmarking and integrating **TurboQuant+** KV-cache compression across LLM inference engines.
 
 ## What this is
