@@ -29,9 +29,10 @@ for arg in "$@"; do
 done
 
 if [[ $has_kv_flag -eq 0 ]]; then
-  echo "[entrypoint] no --kv-cache-dtype passed; defaulting to tq_asym"
-  echo "[entrypoint] override with --kv-cache-dtype fp16 to disable TurboQuant+"
-  set -- "$@" --kv-cache-dtype tq_asym
+  echo "[entrypoint] no --kv-cache-dtype passed; defaulting to turboquant_k8v4"
+  echo "[entrypoint]   (TurboQuant+ asymmetric, K=8bit V=4bit, 62.5% KV savings)"
+  echo "[entrypoint] override with --kv-cache-dtype auto to disable TurboQuant+"
+  set -- "$@" --kv-cache-dtype turboquant_k8v4
 fi
 
 exec vllm serve "$@"

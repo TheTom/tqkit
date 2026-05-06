@@ -15,17 +15,17 @@ docker run --rm -it \
   -p 8000:8000 \
   thetom/vllm-turboquant:rocm-7.2 \
     --model Qwen/Qwen2.5-14B-Instruct-1M \
-    --kv-cache-dtype tq_asym
+    --kv-cache-dtype turboquant_k8v4
 ```
 
-The image defaults to `tq_asym` if no `--kv-cache-dtype` is passed. Override with `fp16` for an apples-to-apples baseline.
+The image defaults to `turboquant_k8v4` if no `--kv-cache-dtype` is passed. Override with `auto` for an apples-to-apples baseline.
 
 ## Install — from source
 
 Requires ROCm 7.2 (or 6.x with patches), Python 3.10+, and a working `hipblaslt`:
 
 ```bash
-git clone -b feature/turboquant-amd https://github.com/TheTom/vllm
+git clone -b feature/turboquant-amd-noautotune https://github.com/TheTom/vllm
 cd vllm
 pip install -e .
 ```
@@ -36,9 +36,13 @@ The AMD-specific kernels live in `vllm/attention/backends/rocm_*` and use ROCm's
 
 ```bash
 vllm serve Qwen/Qwen2.5-14B-Instruct-1M \
-    --kv-cache-dtype tq_asym \
+    --kv-cache-dtype turboquant_k8v4 \
     --max-model-len 131072
 ```
+
+### KV cache layout flags
+
+Same preset names as the CUDA fork. See [vllm-cuda.md](vllm-cuda.md) for the full table. Recommended default for AMD: `turboquant_k8v4` (62.5% savings, headline). For maximum savings on long context: `turboquant_4bit_nc` (75% savings) or `turboquant_3bit_nc` (81% savings, more PPL drift).
 
 ## The 1M-context-on-MI300X demo
 
@@ -56,7 +60,7 @@ docker run --rm -it \
   -p 8000:8000 \
   thetom/vllm-turboquant:rocm-7.2 \
     --model Qwen/Qwen2.5-14B-Instruct-1M \
-    --kv-cache-dtype tq_asym \
+    --kv-cache-dtype turboquant_k8v4 \
     --max-model-len 1048576
 ```
 
@@ -82,4 +86,4 @@ tq report --model qwen2.5-14b-instruct-1m --ctx 1M --layout tq+asym
 
 - ROCm 7.2 only currently. ROCm 6.x backport is on the roadmap.
 - MFMA-friendly scoring kernels are MI300X-tuned; performance on MI250X/W7900 may be suboptimal until per-arch tuning is added.
-- The `tq_asym` path on hybrid (Mamba+Attention) models is not yet validated. Use `tq_sym` for Qwen3-Next family.
+- The asymmetric `turboquant_k8v4` path on hybrid (Mamba+Attention) models is not yet validated. Use `turboquant_4bit_nc` (symmetric) for Qwen3-Next family.

@@ -29,9 +29,66 @@ def cmd_backends(args: argparse.Namespace) -> int:
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
-    print("`tq bench` — canonical KV-savings benchmark", file=sys.stderr)
-    print("(coming in v0.2.0; see TheTom/tqkit GitHub roadmap)", file=sys.stderr)
+    """Run the canonical KV-savings benchmark across detected backends.
+
+    For each (backend × layout) cell:
+      1. Dispatch to the matching tqkit.engines.<backend> bridge.
+      2. Capture the engine's normalized RunResult.
+      3. Tally into a markdown summary table.
+
+    Skips backends that aren't installed (with a note) and engines that
+    don't support the requested layout.
+    """
+    from tqkit.engines import ENGINES, get_engine, EngineNotInstalled
+
+    backends = args.backends or list(ENGINES)
+    layouts = args.layouts or ["fp16", "tq+asym"]
+    rows: list[tuple[str, str, str | None, str | None]] = []
+
+    prompt = args.prompt or "Hello, world. Briefly summarize this prompt."
+    ctx = _parse_ctx(args.ctx)
+
+    for be_name in backends:
+        try:
+            engine = get_engine(be_name)
+        except ValueError as e:
+            print(f"[skip] {e}", file=sys.stderr)
+            continue
+        if not engine.is_installed():
+            print(f"[skip] {be_name}: not installed", file=sys.stderr)
+            continue
+        for layout in layouts:
+            if not engine.supports(layout):
+                rows.append((be_name, layout, None,
+                             f"layout not supported by {be_name}"))
+                continue
+            try:
+                result = engine.run(
+                    model=args.model, prompt=prompt, ctx_tokens=ctx,
+                    layout=layout, max_tokens=args.max_tokens,
+                    timeout=args.timeout,
+                )
+            except EngineNotInstalled as e:
+                rows.append((be_name, layout, None, str(e)))
+                continue
+            kv_str = ("?" if result.kv_cache_bytes is None
+                      else _gb(result.kv_cache_bytes))
+            tps_str = (f"{result.decode_tps:.1f}" if result.decode_tps
+                       else "?")
+            rows.append((be_name, layout,
+                         f"kv={kv_str} tps={tps_str}", None))
+
+    print(f"# tqkit bench — model={args.model} ctx={args.ctx}")
+    print()
+    print("| backend | layout | result | note |")
+    print("| ------- | ------ | ------ | ---- |")
+    for be, layout, result, note in rows:
+        print(f"| {be} | {layout} | {result or '—'} | {note or ''} |")
     return 0
+
+
+def _gb(bytes_count: int) -> str:
+    return f"{bytes_count / (1024 ** 3):.2f} GB"
 
 
 def _parse_ctx(s: str) -> int:
@@ -127,11 +184,14 @@ def cmd_integrate(args: argparse.Namespace) -> int:
         ),
         "vllm-cuda": (
             "git clone -b feature/turboquant-kv-cache https://github.com/TheTom/vllm\n"
-            "cd vllm && pip install -e ."
+            "cd vllm && pip install -e .\n"
+            "vllm serve <model> --kv-cache-dtype turboquant_k8v4   # asym\n"
+            "vllm serve <model> --kv-cache-dtype turboquant_4bit_nc # sym"
         ),
         "vllm-amd": (
-            "docker pull thetom/vllm-turboquant:rocm-7.2  # coming v0.2.0\n"
-            "or build from TheTom/vllm@feature/turboquant-amd"
+            "docker pull thetom/vllm-turboquant:rocm-7.2\n"
+            "or build from TheTom/vllm@feature/turboquant-amd-noautotune\n"
+            "vllm serve <model> --kv-cache-dtype turboquant_k8v4   # asym, headline"
         ),
         "mlx-swift": (
             "swift package add TheTom/mlx-swift-lm@feature/turboquant-plus\n"
@@ -165,6 +225,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub_bench = sub.add_parser("bench",
                                help="run canonical KV-savings benchmark")
+    sub_bench.add_argument("--model", required=True,
+                           help="model path or HF repo (engine-specific)")
+    sub_bench.add_argument("--ctx", default="32K",
+                           help="context length (default 32K)")
+    sub_bench.add_argument("--backends", nargs="+",
+                           help="subset of backends to run; default: all detected")
+    sub_bench.add_argument("--layouts", nargs="+",
+                           help="layouts to compare; default: fp16 tq+asym")
+    sub_bench.add_argument("--prompt", default=None,
+                           help="prompt text; default: short canned probe")
+    sub_bench.add_argument("--max-tokens", type=int, default=64)
+    sub_bench.add_argument("--timeout", type=int, default=600)
     sub_bench.set_defaults(func=cmd_bench)
 
     sub_report = sub.add_parser(

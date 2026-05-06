@@ -48,19 +48,22 @@ backends:
     repo: TheTom/vllm
     branch: feature/turboquant-kv-cache
     commit: TBD
+    # Real --kv-cache-dtype values from the TheTom/vllm fork. TQ+ presets
+    # encode bit widths in the name (k8v4 = K=8bit V=4bit asymmetric;
+    # 4bit_nc = symmetric 4-bit with no centroid).
     flags:
-      fp16:    "--kv-cache-dtype fp16"
-      tq_sym:  "--kv-cache-dtype tq_sym"
-      tq_asym: "--kv-cache-dtype tq_asym"
+      fp16:    "--kv-cache-dtype auto"
+      tq_sym:  "--kv-cache-dtype turboquant_4bit_nc"
+      tq_asym: "--kv-cache-dtype turboquant_k8v4"
   vllm_amd:
     repo: TheTom/vllm
-    branch: feature/turboquant-amd
+    branch: feature/turboquant-amd-noautotune
     commit: TBD
     docker_image: thetom/vllm-turboquant:rocm-7.2   # built in task #121
     flags:
-      fp16:    "--kv-cache-dtype fp16"
-      tq_sym:  "--kv-cache-dtype tq_sym"
-      tq_asym: "--kv-cache-dtype tq_asym"
+      fp16:    "--kv-cache-dtype auto"
+      tq_sym:  "--kv-cache-dtype turboquant_4bit_nc"
+      tq_asym: "--kv-cache-dtype turboquant_k8v4"
   mlx_swift:
     repo: TheTom/mlx
     branch: feature/turboquant-plus

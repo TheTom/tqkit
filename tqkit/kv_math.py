@@ -16,11 +16,19 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ModelArch:
-    """Subset of HF config needed for KV cache math."""
+    """Subset of HF config needed for KV cache math.
+
+    For hybrid linear+full attention models (Qwen3-Next, Qwen3.6), only the
+    full-attention layers contribute to the standard KV cache; linear-attention
+    layers carry their own recurrent state. So `num_layers` here means
+    "number of layers that materialize a standard KV cache," not the total
+    transformer depth. The `notes` field flags hybrid architectures.
+    """
     name: str
     num_layers: int
     num_kv_heads: int  # GQA: distinct from attention heads
     head_dim: int
+    notes: str = ""
 
 
 # Pinned model architectures used in TurboQuant+ benchmarking.
@@ -44,6 +52,21 @@ MODELS: dict[str, ModelArch] = {
     "qwen3-next-80b-a3b": ModelArch(
         "Qwen/Qwen3-Next-80B-A3B",
         num_layers=48, num_kv_heads=2, head_dim=128,  # MoE attention layers
+        notes="MoE; only the attention layers contribute to KV cache",
+    ),
+    "qwen3.6-27b": ModelArch(
+        "Qwen/Qwen3.6-27B",
+        # 64 layers total: 48 linear_attention + 16 full_attention.
+        # Only the 16 full_attention layers carry a standard KV cache.
+        num_layers=16, num_kv_heads=4, head_dim=256,
+        notes="hybrid linear+full attention; KV cache from 16/64 layers only",
+    ),
+    "qwen3.6-35b-a3b": ModelArch(
+        "Qwen/Qwen3.6-35B-A3B",
+        # 40 layers, hybrid; the full-attention count from layer_types is
+        # used here. MoE: 256 experts, 8 active per token (~3B active).
+        num_layers=10, num_kv_heads=2, head_dim=256,
+        notes="MoE + hybrid linear/full attention; ~10 attention layers",
     ),
     "llama-3.1-8b-instruct": ModelArch(
         "meta-llama/Llama-3.1-8B-Instruct",

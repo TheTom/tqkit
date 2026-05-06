@@ -1,6 +1,6 @@
 # Integrating TurboQuant+ into vllm-swift
 
-[vllm-swift](https://github.com/TheTom/vllm-swift) is the native Swift/Metal vLLM backend for Apple Silicon. It speaks the OpenAI Chat Completions API and serves any model that mlx-swift-lm can load.
+[vllm-swift](https://github.com/TheTom/vllm-swift) is the native Swift/Metal vLLM backend for Apple Silicon. It speaks the OpenAI Chat Completions API and serves any model that mlx-swift-lm can load. Backed by TheTom's [mlx-swift-lm@alpha](https://github.com/TheTom/mlx-swift-lm/tree/alpha) — the production-stable TurboQuant+ branch.
 
 ## Install
 

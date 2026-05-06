@@ -8,7 +8,7 @@ Unified toolkit for benchmarking and integrating **TurboQuant+** KV-cache compre
 
 - **llama.cpp** ([TheTom/llama.cpp@feature/turboquant-kv-cache](https://github.com/TheTom/llama.cpp/tree/feature/turboquant-kv-cache))
 - **vLLM (CUDA)** ([TheTom/vllm@feature/turboquant-kv-cache](https://github.com/TheTom/vllm/tree/feature/turboquant-kv-cache))
-- **vLLM (AMD ROCm)** ([TheTom/vllm@feature/turboquant-amd](https://github.com/TheTom/vllm/tree/feature/turboquant-amd))
+- **vLLM (AMD ROCm)** ([TheTom/vllm@feature/turboquant-amd-noautotune](https://github.com/TheTom/vllm/tree/feature/turboquant-amd-noautotune))
 - **MLX-Swift** ([TheTom/mlx@feature/turboquant-plus](https://github.com/TheTom/mlx/tree/feature/turboquant-plus))
 - **vllm-swift** plugin
 
@@ -78,7 +78,7 @@ docker run --rm -it \
     --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host \
     -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
     -p 8000:8000 thetom/vllm-turboquant:rocm-7.2 \
-        --model Qwen/Qwen2.5-14B-Instruct-1M --kv-cache-dtype tq_asym
+        --model Qwen/Qwen2.5-14B-Instruct-1M --kv-cache-dtype turboquant_k8v4
 ```
 
 See [`docker/README.md`](docker/README.md) for build details.

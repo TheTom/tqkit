@@ -1,7 +1,7 @@
 # vLLM with TurboQuant+ KV-cache compression for AMD ROCm.
 #
 # Built on the canonical ROCm 7.2 vLLM dev image. Adds
-# TheTom/vllm@feature/turboquant-amd on top so users get the TQ+ KV cache
+# TheTom/vllm@feature/turboquant-amd-noautotune on top so users get the TQ+ KV cache
 # layouts (tq+sym, tq+asym) and the AMD-specific MFMA-friendly scoring
 # kernels.
 #
@@ -18,7 +18,7 @@
 #     -v $HOME/.cache/huggingface:/root/.cache/huggingface \
 #     -p 8000:8000 thetom/vllm-turboquant:rocm-7.2 \
 #     --model Qwen/Qwen2.5-14B-Instruct-1M \
-#     --kv-cache-dtype tq_asym
+#     --kv-cache-dtype turboquant_k8v4   # K=8bit, V=4bit (62.5% savings)
 #
 # Verify KV savings:
 #   pip install tqkit
@@ -33,7 +33,7 @@ LABEL org.opencontainers.image.description="vLLM + TurboQuant+ KV-cache compress
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 ARG VLLM_REPO=https://github.com/TheTom/vllm.git
-ARG VLLM_BRANCH=feature/turboquant-amd
+ARG VLLM_BRANCH=feature/turboquant-amd-noautotune
 ARG VLLM_COMMIT=HEAD
 
 WORKDIR /workspace

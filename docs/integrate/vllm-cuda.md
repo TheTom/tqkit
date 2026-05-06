@@ -16,20 +16,27 @@ Tested with CUDA 12.4+ on A100, H100, RTX 4090.
 
 ```bash
 vllm serve Qwen/Qwen2.5-14B-Instruct-1M \
-    --kv-cache-dtype tq_asym \
+    --kv-cache-dtype turboquant_k8v4 \
     --max-model-len 131072
 ```
 
 ### KV cache layout flags
 
-| `--kv-cache-dtype` | layout | savings vs FP16 |
-| ------------------ | ------ | --------------- |
-| `auto` / `fp16` | FP16 baseline | — |
-| `fp8` | FP8 (E4M3 or E5M2) | 50% |
-| `tq_sym` | TQ+ symmetric (K=q8_0+WHT, V=q8_0+WHT) | 50% |
-| `tq_asym` | TQ+ asymmetric (K=q8_0+WHT, V=turbo4) | 62.5% |
+The TQ+ presets encode bit widths into the name itself. K=8bit V=4bit is the headline asymmetric layout; `*_nc` means symmetric "no centroid"; `*_rv` is the rotated-V variant (better PPL, same savings).
 
-`tq_asym` is the headline TurboQuant+ layout. Minimal PPL drift at the highest savings.
+| `--kv-cache-dtype` | K bits | V bits | symmetric? | savings vs FP16 |
+| ------------------ | ------ | ------ | ---------- | --------------- |
+| `auto` (default) | 16 | 16 | n/a | — |
+| `fp8`, `fp8_e4m3`, `fp8_e5m2` | 8 | 8 | yes | 50% |
+| `turboquant_4bit_nc` | 4 | 4 | yes | 75% |
+| `turboquant_k8v4` | 8 | 4 | no | **62.5% (headline)** |
+| `turboquant_k8v3` | 8 | 3 | no | 65.6% |
+| `turboquant_k4v3_nc` | 4 | 3 | no | 78.1% |
+| `turboquant_k3v4_nc` | 3 | 4 | no | 78.1% |
+| `turboquant_3bit_nc` | 3 | 3 | yes | 81.3% |
+| any of above + `_rv` | — | — | rotated V | same savings, better PPL |
+
+`turboquant_k8v4` is the recommended default — minimal PPL drift (+0.05–0.20 absolute) at 62.5% savings.
 
 ## Verify the savings
 
@@ -56,7 +63,7 @@ The simplest production win: keep your model the same, halve the KV cache, run 2
 
 ```bash
 vllm serve Qwen/Qwen2.5-14B-Instruct-1M \
-    --kv-cache-dtype tq_asym \
+    --kv-cache-dtype turboquant_k8v4 \
     --max-num-seqs 64    # was 32 with FP16
 ```
 

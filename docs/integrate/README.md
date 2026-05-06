@@ -17,7 +17,7 @@ Each engine exposes a flag that swaps the KV cache from FP16 to a TurboQuant+ la
 | engine | flag |
 | ------ | ---- |
 | llama.cpp | `--ctk q8_0 --ctv turbo4` |
-| vLLM (CUDA / AMD) | `--kv-cache-dtype tq_asym` |
+| vLLM (CUDA / AMD) | `--kv-cache-dtype turboquant_k8v4` |
 | MLX-Swift | `TurboKVCache(.asymmetric)` |
 | vllm-swift | `--kv-layout tq+asym` |
 

@@ -4,12 +4,12 @@ Use TurboQuant+ KV-cache compression with [MLX-Swift](https://github.com/ml-expl
 
 ## Install
 
-The TurboQuant+ port lives on a fork of [mlx](https://github.com/TheTom/mlx) and a fork of [mlx-swift-lm](https://github.com/TheTom/mlx-swift-lm) with matching cache types.
+The TurboQuant+ port lives on TheTom's alpha branch — known-stable, used in production by [vllm-swift](https://github.com/TheTom/vllm-swift). Use this branch over upstream forks for any TQ+ work.
 
 In your `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/TheTom/mlx-swift-lm.git", branch: "feature/turboquant-plus")
+.package(url: "https://github.com/TheTom/mlx-swift-lm.git", branch: "alpha")
 ```
 
 Or for direct mlx (Python):

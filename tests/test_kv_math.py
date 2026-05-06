@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import sys
 from contextlib import redirect_stdout, redirect_stderr
+from unittest.mock import patch
 
 import pytest
 
@@ -166,6 +167,67 @@ def test_cli_config_prints_yaml():
     assert "qwen2.5-14b-instruct-1m" in out
     assert "killer_demo" in out
     assert "vllm_amd" in out
+
+
+def test_cli_bench_runs_with_no_installed_backends():
+    """`tq bench` should print an empty (header-only) table without crashing
+    when no engines are installed on the host."""
+    with patch("tqkit.engines.LlamaCppEngine") as mll, \
+         patch("tqkit.engines.VllmCudaEngine") as mvc, \
+         patch("tqkit.engines.VllmAmdEngine") as mva, \
+         patch("tqkit.engines.MlxSwiftEngine") as mms, \
+         patch("tqkit.engines.VllmSwiftEngine") as mvs:
+        for m in (mll, mvc, mva, mms, mvs):
+            m.return_value.is_installed.return_value = False
+            m.return_value.name = "fake"
+        buf = io.StringIO()
+        err = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(err):
+            rc = main([
+                "bench", "--model", "fake-model",
+                "--ctx", "8K", "--layouts", "fp16",
+            ])
+    assert rc == 0
+    assert "tqkit bench" in buf.getvalue()
+    assert "| backend |" in buf.getvalue()
+
+
+def test_cli_bench_dispatches_to_engine_run():
+    """When an engine is installed, `tq bench` calls its run() method
+    once per layout. Patches `get_engine` so the dispatcher returns our mock
+    regardless of host install state."""
+    from tqkit.engines.base import RunResult
+    from unittest.mock import MagicMock
+
+    fake_result = RunResult(
+        backend="vllm-cuda", model="m", layout="tq+asym",
+        ctx_tokens=8192, kv_cache_bytes=2 * (1024 ** 3),
+        decode_tps=88.5,
+    )
+    fake_engine = MagicMock()
+    fake_engine.is_installed.return_value = True
+    fake_engine.supports.return_value = True
+    fake_engine.run.return_value = fake_result
+    fake_engine.name = "vllm-cuda"
+
+    # cmd_bench does `from tqkit.engines import get_engine` at call time,
+    # so patch the source module rather than the cli namespace.
+    with patch("tqkit.engines.get_engine", return_value=fake_engine):
+        buf = io.StringIO()
+        err = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(err):
+            rc = main([
+                "bench", "--model", "fake-model",
+                "--backends", "vllm-cuda",
+                "--layouts", "tq+asym",
+                "--ctx", "8K",
+            ])
+    assert rc == 0
+    assert fake_engine.run.called
+    out = buf.getvalue()
+    assert "vllm-cuda" in out
+    assert "kv=" in out
+    assert "tps=" in out
 
 
 def test_canonical_bench_yaml_parses_and_has_required_keys():
