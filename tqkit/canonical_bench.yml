@@ -1,0 +1,122 @@
+# tqkit canonical benchmark — pinned, reproducible.
+#
+# This is the workload behind the headline "TurboQuant+ on every engine"
+# claim. Anyone with the matching hardware can run `tq bench` and verify
+# the savings + PPL numbers within ±2%.
+#
+# Schema is intentionally small and human-readable. Engines that don't
+# support a given layout are listed under `unsupported`.
+
+version: 1
+
+# Reference model. KV-cache math derived from this architecture lives in
+# tqkit/kv_math.py:MODELS["qwen2.5-14b-instruct-1m"].
+model:
+  name: qwen2.5-14b-instruct-1m
+  hf_repo: Qwen/Qwen2.5-14B-Instruct-1M
+  hf_revision: main          # pin to a commit hash before v1.0
+  arch:
+    num_layers: 48
+    num_kv_heads: 8
+    head_dim: 128
+
+# Long-context Q&A prompt. Lives at tqkit/prompts/long_qa_32k.txt.
+# sha256 pin is the contract: if the file changes, the bench is no longer
+# the canonical bench.
+prompt:
+  file: prompts/long_qa_32k.txt
+  sha256: TBD                 # filled when prompt asset lands in the repo
+  ctx_tokens: 32768           # nominal length
+
+# KV cache layouts under test. These map to tqkit/kv_math.py:LAYOUT_BYTES_PER_ELEM.
+layouts:
+  - fp16                      # baseline
+  - tq+sym                    # K=q8_0, V=q8_0 (50% savings)
+  - tq+asym                   # K=q8_0, V=turbo4 (62.5% savings, headline)
+
+# Backend forks under test. Pin commits before v1.0; branches drift.
+backends:
+  llama_cpp:
+    repo: TheTom/llama.cpp
+    branch: feature/turboquant-kv-cache
+    commit: TBD
+    flags:
+      fp16:    "--ctk f16  --ctv f16"
+      tq_sym:  "--ctk q8_0 --ctv q8_0"
+      tq_asym: "--ctk q8_0 --ctv turbo4"
+  vllm_cuda:
+    repo: TheTom/vllm
+    branch: feature/turboquant-kv-cache
+    commit: TBD
+    flags:
+      fp16:    "--kv-cache-dtype fp16"
+      tq_sym:  "--kv-cache-dtype tq_sym"
+      tq_asym: "--kv-cache-dtype tq_asym"
+  vllm_amd:
+    repo: TheTom/vllm
+    branch: feature/turboquant-amd
+    commit: TBD
+    docker_image: thetom/vllm-turboquant:rocm-7.2   # built in task #121
+    flags:
+      fp16:    "--kv-cache-dtype fp16"
+      tq_sym:  "--kv-cache-dtype tq_sym"
+      tq_asym: "--kv-cache-dtype tq_asym"
+  mlx_swift:
+    repo: TheTom/mlx
+    branch: feature/turboquant-plus
+    commit: TBD
+    unsupported: []  # all three layouts work
+  vllm_swift:
+    repo: TheTom/vllm-swift
+    branch: main
+    commit: TBD
+    flags:
+      fp16:    "--kv-layout fp16"
+      tq_sym:  "--kv-layout tq+sym"
+      tq_asym: "--kv-layout tq+asym"
+
+# Expected outcomes by (backend, hardware, layout). Bench fails if any
+# measurement falls outside ±2% of the kv_cache_gb cell or ±10% of the
+# decode_tps cell, or if PPL drifts by > 0.10 absolute.
+#
+# Cells marked `TBD` are pending real measurements (Stage 1/Stage 2 demos).
+expected:
+  llama_cpp:
+    rtx_4090:
+      fp16:    {kv_cache_gb: 6.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_sym:  {kv_cache_gb: 3.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_asym: {kv_cache_gb: 2.25, decode_tps: TBD, ppl_wikitext2: TBD}
+    m5_max_metal:
+      fp16:    {kv_cache_gb: 6.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_sym:  {kv_cache_gb: 3.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_asym: {kv_cache_gb: 2.25, decode_tps: TBD, ppl_wikitext2: TBD}
+  vllm_amd:
+    mi300x:
+      fp16:    {kv_cache_gb: 6.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_sym:  {kv_cache_gb: 3.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_asym: {kv_cache_gb: 2.25, decode_tps: TBD, ppl_wikitext2: TBD}
+  mlx_swift:
+    m5_max:
+      fp16:    {kv_cache_gb: 6.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_sym:  {kv_cache_gb: 3.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_asym: {kv_cache_gb: 2.25, decode_tps: TBD, ppl_wikitext2: TBD}
+  vllm_swift:
+    m5_max:
+      fp16:    {kv_cache_gb: 6.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_sym:  {kv_cache_gb: 3.0,  decode_tps: TBD, ppl_wikitext2: TBD}
+      tq_asym: {kv_cache_gb: 2.25, decode_tps: TBD, ppl_wikitext2: TBD}
+
+# The killer-demo workload: 1M-token context on MI300X with TQ+ asym KV.
+# Separate from the canonical bench because it exercises a single cell
+# (vllm_amd / mi300x / tq_asym / 1M ctx) at the limit.
+killer_demo:
+  model: qwen2.5-14b-instruct-1m
+  ctx_tokens: 1048576
+  hardware: mi300x_192gb
+  layout: tq+asym
+  expected:
+    kv_cache_gb: 72.0           # vs 192 GB FP16
+    decode_tps: TBD             # measure at launch
+    headline_claim: >
+      first 1M-token context inference of a 14B model on a single GPU.
+      FP16 KV cache (192 GB) exceeds VRAM on every single GPU made today.

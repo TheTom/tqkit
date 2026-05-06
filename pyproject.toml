@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tqkit"
-version = "0.2.0"
+version = "0.2.1"
 description = "Unified toolkit for benchmarking and integrating TurboQuant+ KV-cache compression across inference engines (llama.cpp, vLLM, MLX)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -40,3 +40,10 @@ Documentation = "https://github.com/TheTom/tqkit#readme"
 
 [tool.setuptools.packages.find]
 include = ["tqkit*"]
+
+[tool.setuptools.package-data]
+tqkit = ["canonical_bench.yml", "prompts/*.txt"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=tqkit --cov-fail-under=85"
+testpaths = ["tests"]

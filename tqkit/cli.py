@@ -76,6 +76,19 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_config(args: argparse.Namespace) -> int:
+    """Print the canonical benchmark config (pinned model + prompt + expected results)."""
+    import importlib.resources as ir
+    try:
+        text = ir.files("tqkit").joinpath("canonical_bench.yml").read_text()
+    except (FileNotFoundError, AttributeError):
+        # development install fallback
+        from pathlib import Path
+        text = (Path(__file__).parent / "canonical_bench.yml").read_text()
+    print(text)
+    return 0
+
+
 def cmd_table(args: argparse.Namespace) -> int:
     """Print the unified KV-savings table for one model across layouts."""
     if args.model not in MODELS:
@@ -172,6 +185,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="KV cache layout. default tq+asym",
     )
     sub_report.set_defaults(func=cmd_report)
+
+    sub_config = sub.add_parser(
+        "config",
+        help="print the canonical benchmark YAML (pinned model + expected results)",
+    )
+    sub_config.set_defaults(func=cmd_config)
 
     sub_table = sub.add_parser(
         "table",

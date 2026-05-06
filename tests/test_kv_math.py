@@ -152,3 +152,32 @@ def test_cli_integrate_unknown_backend():
     with pytest.raises(SystemExit) as exc:
         main(["integrate", "fake"])
     assert exc.value.code == 2
+
+
+def test_cli_config_prints_yaml():
+    """`tq config` emits the pinned canonical_bench.yml."""
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = main(["config"])
+    assert rc == 0
+    out = buf.getvalue()
+    # Spot-checks: schema markers any caller of the bench would care about
+    assert "version: 1" in out
+    assert "qwen2.5-14b-instruct-1m" in out
+    assert "killer_demo" in out
+    assert "vllm_amd" in out
+
+
+def test_canonical_bench_yaml_parses_and_has_required_keys():
+    """The shipped canonical_bench.yml is well-formed and has the expected schema."""
+    yaml = pytest.importorskip("yaml")
+    from pathlib import Path
+    text = (Path(__file__).parent.parent / "tqkit" / "canonical_bench.yml").read_text()
+    data = yaml.safe_load(text)
+    assert data["version"] == 1
+    assert data["model"]["name"] == "qwen2.5-14b-instruct-1m"
+    assert "tq+asym" in data["layouts"]
+    assert {"llama_cpp", "vllm_cuda", "vllm_amd", "mlx_swift", "vllm_swift"}.issubset(
+        set(data["backends"])
+    )
+    assert data["killer_demo"]["ctx_tokens"] == 1048576
