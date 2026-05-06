@@ -41,12 +41,19 @@ ARG VLLM_COMMIT=HEAD
 
 WORKDIR /workspace
 
+# vLLM's setup.py auto-detects CUDA via nvcc, which fails inside a ROCm-only
+# container. VLLM_TARGET_DEVICE=rocm short-circuits that detection. The base
+# image already has a working vllm install; --no-build-isolation lets pip
+# reuse the existing torch + ROCm wheels instead of rebuilding the world.
+ENV VLLM_TARGET_DEVICE=rocm
+
 # Pull the patched vLLM and install in editable mode so the user can
 # inspect / patch from inside the container if they want to.
 RUN git clone --branch ${VLLM_BRANCH} --depth 1 ${VLLM_REPO} vllm \
  && cd vllm \
  && git rev-parse HEAD > /workspace/.vllm-commit \
- && pip install --no-cache-dir -e . \
+ && python3 use_existing_torch.py \
+ && VLLM_TARGET_DEVICE=rocm pip install --no-cache-dir --no-build-isolation -e . \
  && pip install --no-cache-dir --upgrade tqkit
 
 # Sanity: print the KV reporter info at container start so users see the
